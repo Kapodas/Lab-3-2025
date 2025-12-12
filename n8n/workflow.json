@@ -1,0 +1,123 @@
+{
+  "name": "Weekly Weather Forecast Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "31eacae3-ec9c-4945-a43b-c4198640270a",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const dates = [];\nfor (let i = 1; i <= 7; i++) {\n  const date = new Date();\n  date.setDate(date.getDate() + i);\n  dates.push(date.toISOString().split('T')[0]); // Формат YYYY-MM-DD\n}\n\n// Создаем тело запроса\nconst requestBody = {\n  city: \"London\",\n  dates: dates,\n  additional_features: {\n    source: \"n8n_weekly_pipeline\",\n    forecast_type: \"weekly\"\n  }\n};\nreturn requestBody;"
+      },
+      "id": "119590d7-076c-4958-b0f2-86d9ab1dafbd",
+      "name": "Generate Dates",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://weather-api:8000/predict",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "e5d3c40c-d5de-4eb4-a1c1-dd7c9fd441de",
+      "name": "HTTP Request (FastAPI Predict)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "-5078092097",
+        "text": "=Прогноз погоды на неделю для города {{ $json.city }}\n\n📊 Версия модели {{ $json.model_version }}\n🕒 Сгенерировано: {{ new Date($json.generated_at).toLocaleString('ru-RU') }}\n\nПрогноз температуры:\n{{ $json.dates.map((date, index) => '📅 ' + date + ': ' + $json.predictions[index] + '°C (' + $json.confidence_intervals[index].lower + '...' + $json.confidence_intervals[index].upper + '°C)').join('\\n') }}\n\nСредняя температура недели: {{ ($json.predictions.reduce((sum, temp) => sum + parseFloat(temp), 0) / $json.predictions.length).toFixed(1) }}°C",
+        "additionalFields": {}
+      },
+      "id": "d6511bcc-0d33-4dcf-8bdf-2f33b75547b8",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ],
+      "webhookId": "7e4a0143-f65d-49b2-8fcd-52ca985e8afb",
+      "credentials": {
+        "telegramApi": {
+          "id": "7ltwSnrpaE3PFqgJ",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Dates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Dates": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (FastAPI Predict)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (FastAPI Predict)": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "03f348f9-746b-4641-8b31-65fbe9799a14",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5560f4d39e045e1a7f2152df7353703d2d23fa4170cde9f152c5ce420afd33f7"
+  },
+  "id": "3FV7bhmEnjYUnUWN",
+  "tags": []
+}

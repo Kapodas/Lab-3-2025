@@ -1,0 +1,193 @@
+version: "3.8"
+
+services:
+  # ClearML сервисы
+  apiserver:
+    command:
+      - apiserver
+    container_name: clearml-apiserver
+    image: clearml/server:latest
+    restart: unless-stopped
+    volumes:
+      - ./data/logs:/var/log/clearml
+      - ./data/config:/opt/clearml/config
+      - ./data/fileserver:/mnt/fileserver
+    depends_on:
+      - redis
+      - mongo
+      - elasticsearch
+      - fileserver
+    environment:
+      CLEARML_ELASTIC_SERVICE_HOST: elasticsearch
+      CLEARML_ELASTIC_SERVICE_PORT: 9200
+      CLEARML_MONGODB_SERVICE_HOST: mongo
+      CLEARML_MONGODB_SERVICE_PORT: 27017
+      CLEARML_REDIS_SERVICE_HOST: redis
+      CLEARML_REDIS_SERVICE_PORT: 6379
+      CLEARML_SERVER_DEPLOYMENT_TYPE: linux
+      CLEARML__apiserver__pre_populate__enabled: "true"
+      CLEARML__apiserver__pre_populate__zip_files: "/opt/clearml/db-pre-populate"
+      CLEARML__apiserver__pre_populate__artifacts_path: "/mnt/fileserver"
+      CLEARML__services__async_urls_delete__enabled: "true"
+      CLEARML__services__async_urls_delete__fileserver__url_prefixes: "[${CLEARML_FILES_HOST:-}]"
+      CLEARML__secure__credentials__services_agent__user_key: ${CLEARML_AGENT_ACCESS_KEY:-}
+      CLEARML__secure__credentials__services_agent__user_secret: ${CLEARML_AGENT_SECRET_KEY:-}
+    ports:
+      - "8008:8008"
+    networks:
+      - clearml-network
+
+  elasticsearch:
+    container_name: clearml-elastic
+    environment:
+      bootstrap.memory_lock: "true"
+      cluster.name: clearml
+      cluster.routing.allocation.node_initial_primaries_recoveries: "500"
+      cluster.routing.allocation.disk.watermark.low: 500mb
+      cluster.routing.allocation.disk.watermark.high: 500mb
+      cluster.routing.allocation.disk.watermark.flood_stage: 500mb
+      discovery.type: "single-node"
+      http.compression_level: "7"
+      node.name: clearml
+      reindex.remote.whitelist: "'*.*'"
+      xpack.security.enabled: "false"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    image: elasticsearch:8.17.0
+    restart: unless-stopped
+    volumes:
+      - ./data/elastic_7:/usr/share/elasticsearch/data
+      - ./data/logs:/usr/share/elasticsearch/logs
+    networks:
+      - clearml-network
+
+  fileserver:
+    command:
+      - fileserver
+    container_name: clearml-fileserver
+    image: clearml/server:latest
+    environment:
+      CLEARML__fileserver__delete__allow_batch: "true"
+    restart: unless-stopped
+    volumes:
+      - ./data/logs:/var/log/clearml
+      - ./data/fileserver:/mnt/fileserver
+      - ./data/config:/opt/clearml/config
+    ports:
+      - "8081:8081"
+    networks:
+      - clearml-network
+
+  mongo:
+    container_name: clearml-mongo
+    image: mongo:7.0.22
+    restart: unless-stopped
+    command: --setParameter internalQueryMaxBlockingSortMemoryUsageBytes=196100200
+    volumes:
+      - ./data/mongo_4/db:/data/db
+      - ./data/mongo_4/configdb:/data/configdb
+    networks:
+      - clearml-network
+
+  redis:
+    container_name: clearml-redis
+    image: redis:7.4.1
+    restart: unless-stopped
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - clearml-network
+
+  webserver:
+    command:
+      - webserver
+    container_name: clearml-webserver
+    image: clearml/server:latest
+    restart: unless-stopped
+    depends_on:
+      - apiserver
+    ports:
+      - "8080:80"
+    networks:
+      - clearml-network
+
+  async_delete:
+    depends_on:
+      - apiserver
+      - redis
+      - mongo
+      - elasticsearch
+      - fileserver
+    container_name: async_delete
+    image: clearml/server:latest
+    restart: unless-stopped
+    environment:
+      CLEARML_ELASTIC_SERVICE_HOST: elasticsearch
+      CLEARML_ELASTIC_SERVICE_PORT: 9200
+      CLEARML_MONGODB_SERVICE_HOST: mongo
+      CLEARML_MONGODB_SERVICE_PORT: 27017
+      CLEARML_REDIS_SERVICE_HOST: redis
+      CLEARML_REDIS_SERVICE_PORT: 6379
+      PYTHONPATH: /opt/clearml/apiserver
+      CLEARML__services__async_urls_delete__fileserver__url_prefixes: "[${CLEARML_FILES_HOST:-}]"
+    entrypoint:
+      - python3
+      - -m
+      - jobs.async_urls_delete
+      - --fileserver-host
+      - http://fileserver:8081
+    volumes:
+      - ./data/logs:/var/log/clearml
+      - ./data/config:/opt/clearml/config
+    networks:
+      - clearml-network
+
+  # Weather API сервис
+  weather-api:
+    build: ./src/api
+    container_name: weather-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - webserver
+      - apiserver
+    volumes:
+      - ./models:/app/models
+      - ./src/training/models:/app/training_models
+      - ./data:/app/data
+    environment:
+      - MODEL_NAME=best_hpo_regression.txt
+      - MODEL_PATH=/app/models/best_hpo_regression.txt
+      - FALLBACK_MODEL_ENABLED=true
+    networks:
+      - clearml-network
+
+  # N8N сервис
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=password
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_WEBHOOK_URL=http://localhost:5678/
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+    volumes:
+      - ./n8n/data:/home/node/.n8n
+    networks:
+      - clearml-network
+
+networks:
+  clearml-network:
+    driver: bridge
