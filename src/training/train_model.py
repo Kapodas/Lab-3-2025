@@ -17,15 +17,15 @@ warnings.filterwarnings('ignore')
 def setup_task():
     """Настройка задачи ClearML"""
     print("=" * 60)
-    print("ОБУЧЕНИЕ МОДЕЛИ ДЛЯ ПРОГНОЗА СРЕДНЕЙ ТЕМПЕРАТУРЫ")  # ИЗМЕНЕНО
+    print("ОБУЧЕНИЕ МОДЕЛИ ДЛЯ ПРОГНОЗА СРЕДНЕЙ ТЕМПЕРАТУРЫ")
     print("=" * 60)
     
     task = Task.init(
         project_name='Lab3_Weather_Forecasting',
-        task_name=f'Temperature_Prediction_Model_{datetime.now().strftime("%Y%m%d_%H%M")}',  # ИЗМЕНЕНО
+        task_name=f'Temperature_Prediction_Model_{datetime.now().strftime("%Y%m%d_%H%M")}',
         task_type=Task.TaskTypes.training,
         reuse_last_task_id=False,
-        tags=['lightgbm', 'regression', 'weather', 'temperature', 'lab3']  # ИЗМЕНЕНО
+        tags=['lightgbm', 'regression', 'weather', 'temperature', 'lab3']
     )
     
     return task
@@ -103,17 +103,17 @@ def create_sample_data():
     })
     
     # Целевая переменная - средняя температура
-    df['temp_avg'] = (df['temp_max'] + df['temp_min']) / 2  # ИЗМЕНЕНО
+    df['temp_avg'] = (df['temp_max'] + df['temp_min']) / 2
     
     # Добавляем лаги и скользящие средние для температуры
     for lag in [1, 2, 3, 7, 14]:
-        df[f'temp_avg_lag_{lag}'] = df['temp_avg'].shift(lag)  # ИЗМЕНЕНО
+        df[f'temp_avg_lag_{lag}'] = df['temp_avg'].shift(lag)
         df[f'temp_max_lag_{lag}'] = df['temp_max'].shift(lag)
         df[f'temp_min_lag_{lag}'] = df['temp_min'].shift(lag)
         df[f'precip_lag_{lag}'] = df['precipitation_sum'].shift(lag)
     
     for window in [3, 7, 14]:
-        df[f'temp_avg_avg_{window}d'] = df['temp_avg'].rolling(window).mean()  # ИЗМЕНЕНО
+        df[f'temp_avg_avg_{window}d'] = df['temp_avg'].rolling(window).mean()
         df[f'temp_max_avg_{window}d'] = df['temp_max'].rolling(window).mean()
         df[f'temp_min_avg_{window}d'] = df['temp_min'].rolling(window).mean()
         df[f'precip_avg_{window}d'] = df['precipitation_sum'].rolling(window).mean()
@@ -142,7 +142,6 @@ def prepare_features(df, task):
     # Исключаем целевые и временные колонки
     exclude_cols = [
         'date', 'temp_avg',  # Целевая переменная
-        # Можно добавить другие колонки для исключения
     ]
     
     # Создаем список признаков (все колонки кроме исключенных)

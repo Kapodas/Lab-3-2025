@@ -38,8 +38,7 @@ def main():
     
     # Подготовка признаков для регрессии (предсказываем temp_avg)
     exclude_features = [
-        'date', 'rain_probability',  # rain_probability исключаем, т.к. это бинарная переменная
-        # Для регрессии оставляем большинство признаков
+        'date', 'rain_probability',
     ]
     
     features = [col for col in df.columns if col not in exclude_features]
@@ -78,7 +77,6 @@ def main():
             'random_state': 42
         }
         
-        # ИСПРАВЛЕНО: Используем LGBMRegressor вместо LGBMClassifier
         model = lgb.LGBMRegressor(**params)
         
         model.fit(
@@ -114,7 +112,6 @@ def main():
     X_train_full = pd.concat([X_train, X_val])
     y_train_full = pd.concat([y_train, y_val])
     
-    # ИСПРАВЛЕНО: Используем LGBMRegressor
     best_model = lgb.LGBMRegressor(
         objective='regression',
         metric='rmse',
@@ -141,7 +138,7 @@ def main():
     
     # Сохраняем модель
     os.makedirs('models', exist_ok=True)
-    model_path = 'models/best_hpo_regression.txt'  # ИЗМЕНЕНО имя файла
+    model_path = 'models/best_hpo_regression.txt'
     best_model.booster_.save_model(model_path)
     
     print(f"\n💾 Модель сохранена: {model_path}")
